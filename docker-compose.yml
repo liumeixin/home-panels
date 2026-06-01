@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  home-panels:
+    image: ghcr.io/liumeixin/home-panels:latest
+    container_name: home-panels
+    ports:
+      - "18090:8080"
+    volumes:
+      - /volume1/docker/hermes/hermes:/opt/data/hermes
+    environment:
+      - DATA_DIR=/opt/data/hermes
+    restart: unless-stopped
+    user: "1000:1000"
