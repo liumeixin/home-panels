@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HomePanels - 家庭数字仪表盘</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        
+        /* 顶部导航 */
+        .tabs { display: flex; background: #fff; border-bottom: 1px solid #e0e0e0; padding: 0 20px; }
+        .tab { padding: 16px 24px; cursor: pointer; border-bottom: 3px solid transparent; color: #666; font-weight: 500; }
+        .tab:hover { color: #333; }
+        .tab.active { border-bottom-color: #1988FC; color: #1988FC; }
+        
+        /* 内容区 */
+        .content { padding: 24px; max-width: 1200px; margin: 0 auto; }
+        .panel { display: none; }
+        .panel.active { display: block; }
+        
+        /* 卡片 */
+        .card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .card h3 { margin-bottom: 16px; font-size: 16px; color: #333; border-left: 4px solid #1988FC; padding-left: 12px; }
+        
+        /* 统计数字 */
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+        .stat { background: #f8f9fa; padding: 16px; border-radius: 8px; text-align: center; }
+        .stat-value { font-size: 28px; font-weight: 700; color: #1988FC; }
+        .stat-label { font-size: 13px; color: #666; margin-top: 4px; }
+        .stat-value.income { color: #52c41a; }
+        .stat-value.expense { color: #ff4d4f; }
+        .stat-value.balance { color: #faad14; }
+        
+        /* 表格 */
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #f0f0f0; }
+        th { background: #fafafa; font-weight: 600; color: #333; }
+        tr:hover { background: #f8f9fa; }
+        .status-overdue { color: #ff4d4f; font-weight: 600; }
+        .status-progress { color: #1988FC; }
+        
+        /* 按钮 */
+        .btn { padding: 10px 20px; background: #1988FC; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+        .btn:hover { background: #1470d1; }
+        .btn-outline { background: #fff; border: 1px solid #d9d9d9; color: #333; }
+        .btn-outline:hover { border-color: #1988FC; color: #1988FC; }
+        
+        /* Token 卡片 */
+        .token-card { border: 1px solid #e8e8e8; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+        .token-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .token-name { font-weight: 600; }
+        .token-type { font-size: 12px; padding: 2px 8px; border-radius: 4px; background: #e6f7ff; color: #1890ff; }
+        .token-type.subscription { background: #f6ffed; color: #52c41a; }
+        .token-bar { height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; }
+        .token-bar-fill { height: 100%; background: #1988FC; border-radius: 4px; transition: width 0.3s; }
+        .token-bar-fill.warning { background: #faad14; }
+        .token-bar-fill.danger { background: #ff4d4f; }
+        .token-info { display: flex; justify-content: space-between; font-size: 13px; color: #666; margin-top: 8px; }
+        
+        /* 优化建议 */
+        .tips { background: #fff7e6; border: 1px solid #ffd591; padding: 16px; border-radius: 8px; margin-top: 16px; }
+        .tips h4 { color: #d46b08; margin-bottom: 8px; }
+        .tips ul { padding-left: 20px; color: #874200; }
+        .tips li { margin-bottom: 4px; }
+        
+        /* 搜索框 */
+        .search-box { display: flex; gap: 12px; margin-bottom: 16px; }
+        .search-box input { padding: 10px 14px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; }
+        .search-box input:focus { border-color: #1988FC; outline: none; }
+        
+        /* 弹窗 */
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; }
+        .modal.show { display: flex; align-items: center; justify-content: center; }
+        .modal-content { background: #fff; border-radius: 8px; padding: 24px; max-width: 800px; max-height: 80vh; overflow: auto; width: 90%; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .modal-close { font-size: 24px; cursor: pointer; color: #999; }
+        .modal-close:hover { color: #333; }
+    </style>
+</head>
+<body>
+    <!-- 顶部导航 -->
+    <div class="tabs">
+        <div class="tab active" data-tab="tokens">Token 仪表盘</div>
+        <div class="tab" data-tab="ledger">家庭账本</div>
+        <div class="tab" data-tab="tasks">工作任务</div>
+    </div>
+    
+    <div class="content">
+        <!-- Token 仪表盘 -->
+        <div id="tokens" class="panel active">
+            <div class="card">
+                <h3>📊 Token 用量总览</h3>
+                <div id="token-list" class="stats"></div>
+            </div>
+            <div class="card">
+                <h3>💡 Token 优化建议</h3>
+                <button class="btn" onclick="generateTokenTips()">生成优化建议</button>
+                <div id="token-tips" class="tips" style="display:none;"></div>
+            </div>
+        </div>
+        
+        <!-- 家庭账本 -->
+        <div id="ledger" class="panel">
+            <div class="card">
+                <h3>📅 本年度收支</h3>
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-value income" id="year-income">-</div>
+                        <div class="stat-label">年度收入</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value expense" id="year-expense">-</div>
+                        <div class="stat-label">年度支出</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value balance" id="year-balance">-</div>
+                        <div class="stat-label">年度结余</div>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>📆 本月收支</h3>
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-value income" id="month-income">-</div>
+                        <div class="stat-label">本月收入</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value expense" id="month-expense">-</div>
+                        <div class="stat-label">本月支出</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value balance" id="month-balance">-</div>
+                        <div class="stat-label">本月结余</div>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>📝 今日收支详单</h3>
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-value income" id="today-income">-</div>
+                        <div class="stat-label">今日收入</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value expense" id="today-expense">-</div>
+                        <div class="stat-label">今日支出</div>
+                    </div>
+                </div>
+                <table id="today-table">
+                    <thead>
+                        <tr>
+                            <th>时间</th>
+                            <th>类型</th>
+                            <th>金额</th>
+                            <th>备注</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- 工作任务 -->
+        <div id="tasks" class="panel">
+            <div class="card">
+                <h3>📋 未完成任务</h3>
+                <table id="pending-tasks">
+                    <thead>
+                        <tr>
+                            <th>任务名</th>
+                            <th>开始时间</th>
+                            <th>截止时间</th>
+                            <th>进度</th>
+                            <th>状态</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="card">
+                <h3>🔍 任务查询</h3>
+                <div class="search-box">
+                    <input type="date" id="search-start">
+                    <span>至</span>
+                    <input type="date" id="search-end">
+                    <button class="btn" onclick="searchTasks()">查询</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 弹窗 -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>查询结果</h3>
+                <span class="modal-close" onclick="closeModal()">&times;</span>
+            </div>
+            <table id="search-results">
+                <thead>
+                    <tr>
+                        <th>任务名</th>
+                        <th>开始时间</th>
+                        <th>截止时间</th>
+                        <th>完成时间</th>
+                        <th>是否按时</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script>
+        // 标签切换
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab).classList.add('active');
+            });
+        });
+        
+        // 格式化金额
+        function formatMoney(amount) {
+            return '¥' + amount.toFixed(2);
+        }
+        
+        // 格式化日期
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            return dateStr.substring(0, 10);
+        }
+        
+        // ========== Token 模块 ==========
+        async function loadTokens() {
+            const res = await fetch('/api/tokens/summary');
+            const data = await res.json();
+            
+            const container = document.getElementById('token-list');
+            container.innerHTML = '';
+            
+            for (const [key, info] of Object.entries(data)) {
+                const percent = info.limit > 0 ? (info.total_usage / info.limit * 100) : 0;
+                const barClass = percent > 90 ? 'danger' : (percent > 70 ? 'warning' : '');
+                
+                container.innerHTML += `
+                    <div class="token-card">
+                        <div class="token-header">
+                            <span class="token-name">${info.name}</span>
+                            <span class="token-type ${info.type}">${info.type === 'subscription' ? '订阅' : '按量'}</span>
+                        </div>
+                        <div class="token-bar">
+                            <div class="token-bar-fill ${barClass}" style="width: ${Math.min(percent, 100)}%"></div>
+                        </div>
+                        <div class="token-info">
+                            <span>已用: ${info.total_usage.toLocaleString()}</span>
+                            <span>限额: ${info.limit.toLocaleString()}</span>
+                            <span>剩余: ${info.remaining.toLocaleString()}</span>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        function generateTokenTips() {
+            const tipsDiv = document.getElementById('token-tips');
+            tipsDiv.style.display = 'block';
+            tipsDiv.innerHTML = `
+                <h4>💡 优化建议</h4>
+                <ul>
+                    <li>建议定期检查各 Token 供应商的用量，避免超出限额</li>
+                    <li>如果某个供应商用量接近上限，考虑切换到其他供应商</li>
+                    <li>订阅制建议设置为用量提醒，避免意外超额</li>
+                </ul>
+            `;
+        }
+        
+        // ========== 账本模块 ==========
+        async function loadLedger() {
+            const res = await fetch('/api/ledger/summary');
+            const data = await res.json();
+            
+            // 年度
+            document.getElementById('year-income').textContent = formatMoney(data.year.income);
+            document.getElementById('year-expense').textContent = formatMoney(data.year.expense);
+            document.getElementById('year-balance').textContent = formatMoney(data.year.balance);
+            
+            // 月度
+            document.getElementById('month-income').textContent = formatMoney(data.month.income);
+            document.getElementById('month-expense').textContent = formatMoney(data.month.expense);
+            document.getElementById('month-balance').textContent = formatMoney(data.month.balance);
+            
+            // 今日
+            document.getElementById('today-income').textContent = formatMoney(data.today.income);
+            document.getElementById('today-expense').textContent = formatMoney(data.today.expense);
+            
+            // 今日明细
+            const tbody = document.querySelector('#today-table tbody');
+            tbody.innerHTML = '';
+            data.today.details.forEach(t => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${formatDate(t.date)}</td>
+                        <td>${t.type === 'income' ? '收入' : '支出'}</td>
+                        <td class="${t.type === 'income' ? 'income' : 'expense'}">${formatMoney(t.amount)}</td>
+                        <td>${t.note || '-'}</td>
+                    </tr>
+                `;
+            });
+        }
+        
+        // ========== 任务模块 ==========
+        async function loadPendingTasks() {
+            const res = await fetch('/api/tasks/pending');
+            const tasks = await res.json();
+            
+            const tbody = document.querySelector('#pending-tasks tbody');
+            tbody.innerHTML = '';
+            
+            tasks.forEach(t => {
+                const statusHtml = t.overdue_days > 0 
+                    ? `<span class="status-overdue">超期 ${t.overdue_days} 天</span>`
+                    : `<span class="status-progress">${t.progress}%</span>`;
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${t.content}</td>
+                        <td>${formatDate(t.start)}</td>
+                        <td>${formatDate(t.deadline)}</td>
+                        <td>${t.progress}%</td>
+                        <td>${statusHtml}</td>
+                    </tr>
+                `;
+            });
+        }
+        
+        async function searchTasks() {
+            const start = document.getElementById('search-start').value;
+            const end = document.getElementById('search-end').value;
+            
+            if (!start || !end) {
+                alert('请选择查询日期范围');
+                return;
+            }
+            
+            const res = await fetch('/api/tasks/search', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({start_date: start, end_date: end})
+            });
+            const results = await res.json();
+            
+            const tbody = document.querySelector('#search-results tbody');
+            tbody.innerHTML = '';
+            
+            if (results.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">查询范围内无任务</td></tr>';
+            } else {
+                results.forEach(t => {
+                    const onTime = t.on_time === null ? '-' : (t.on_time ? '✅ 是' : '❌ 否');
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${t.content}</td>
+                            <td>${formatDate(t.start)}</td>
+                            <td>${formatDate(t.deadline)}</td>
+                            <td>${formatDate(t.completed_at)}</td>
+                            <td>${onTime}</td>
+                        </tr>
+                    `;
+                });
+            }
+            
+            document.getElementById('modal').classList.add('show');
+        }
+        
+        function closeModal() {
+            document.getElementById('modal').classList.remove('show');
+        }
+        
+        // 点击弹窗外部关闭
+        document.getElementById('modal').addEventListener('click', (e) => {
+            if (e.target.id === 'modal') closeModal();
+        });
+        
+        // 初始化
+        loadTokens();
+        loadLedger();
+        loadPendingTasks();
+    </script>
+</body>
+</html>
