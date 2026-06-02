@@ -71,17 +71,16 @@ def get_token_summary():
 
 def load_ledger():
     """加载账本数据"""
-    path = os.path.join(DATA_DIR, 'family-ledger', 'ledger.json')
+    path = os.path.join(DATA_DIR, 'family-ledger', 'daily.json')
     if os.path.exists(path):
         with open(path, 'r', encoding='utf-8') as f:
             return json.load(f)
-    return {'transactions': []}
+    return []
 
 @app.route('/api/ledger/summary')
 def get_ledger_summary():
     """获取账本年度/月度汇总"""
-    ledger = load_ledger()
-    transactions = ledger.get('transactions', [])
+    transactions = load_ledger()
     
     today = date.today()
     current_year = today.year
@@ -100,30 +99,30 @@ def get_ledger_summary():
     
     for t in transactions:
         try:
-            t_date = datetime.fromisoformat(t.get('date', '')).date()
+            t_date = datetime.strptime(t.get('date', ''), '%Y-%m-%d').date()
         except:
             continue
         
         amount = t.get('amount', 0)
-        t_type = t.get('type', 'expense')
+        t_type = t.get('type', '支出')
         
         # 年度
         if t_date.year == current_year:
-            if t_type == 'income':
+            if t_type == '收入':
                 year_income += amount
             else:
                 year_expense += amount
         
         # 本月
-        if t_date.year == current_month and t_date.month == current_month:
-            if t_type == 'income':
+        if t_date.year == current_year and t_date.month == current_month:
+            if t_type == '收入':
                 month_income += amount
             else:
                 month_expense += amount
         
         # 今日
         if t_date == today:
-            if t_type == 'income':
+            if t_type == '收入':
                 today_income += amount
             else:
                 today_expense += amount
